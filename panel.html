@@ -1,1 +1,227 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esnaf Yönetim Paneli | Dijital Çözüm Ortağı</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --primary: #2b2d42; --secondary: #8d99ae; --accent: #ef233c; --success: #2a9d8f; --bg: #f8f9fa; --white: #ffffff; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: var(--primary); padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        
+        .card { background: var(--white); padding: 30px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .stat-card { background: linear-gradient(135deg, var(--success), #21867a); color: white; text-align: center; }
+        
+        h1, h2, h3 { margin-bottom: 20px; color: var(--primary); }
+        .stat-card h3 { color: white; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; transition: border 0.3s; }
+        input:focus, textarea:focus { border-color: var(--primary); outline: none; }
+        
+        button { background-color: var(--primary); color: var(--white); border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        button:hover { background-color: #1a1b28; }
+        
+        .btn-outline { background: white; color: var(--success); width: auto; margin: 0 auto; border-radius: 50px; padding: 10px 20px; font-size: 14px; }
+        .btn-outline:hover { background: #f1f1f1; }
+        .btn-danger { background-color: var(--accent); width: auto; padding: 8px 15px; font-size: 12px; }
+        .btn-danger:hover { background-color: #d90429; }
+        
+        #status { text-align: center; margin-top: 10px; font-weight: bold; height: 20px; }
+        .text-success { color: var(--success); }
+        .text-error { color: var(--accent); }
+        
+        .product-item { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; }
+        .product-info h4 { margin-bottom: 5px; }
+        .product-info p { font-size: 12px; color: var(--secondary); }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <div class="card stat-card">
+        <h3><i class="fa-solid fa-chart-line"></i> Bu Ayki Müşteri Memnuniyeti</h3>
+        <div style="font-size: 42px; font-weight: bold; margin-bottom: 15px;" id="satisfactionCount">0</div>
+        <button type="button" class="btn-outline" onclick="addSatisfaction()">
+            <i class="fa-brands fa-whatsapp"></i> WhatsApp'tan Memnuniyet Geldi (+1)
+        </button>
+    </div>
+
+    <div class="card">
+        <h2><i class="fa-solid fa-box-open"></i> Yeni Ürün Ekle</h2>
+        <form id="productForm">
+            <div class="form-group">
+                <label>Ürün Adı</label>
+                <input type="text" id="pName" required>
+            </div>
+            <div class="form-group">
+                <label>Fiyat (TL)</label>
+                <input type="number" id="pPrice" required>
+            </div>
+            <div class="form-group">
+                <label>Görsel Linki (URL)</label>
+                <input type="url" id="pImg" required>
+            </div>
+            <div class="form-group">
+                <label>Açıklama / Özellikler</label>
+                <textarea id="pDesc" rows="3" required></textarea>
+            </div>
+            <button type="submit" id="submitBtn"><i class="fa-solid fa-plus"></i> Ürünü Vitrine Ekle</button>
+            <p id="status"></p>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2><i class="fa-solid fa-list"></i> Mevcut Ürünler</h2>
+        <div id="productsContainer"><i class="fa-solid fa-spinner fa-spin"></i> Yükleniyor...</div>
+    </div>
+</div>
+
+<script>
+    // AYARLAR: Kendi GitHub bilgilerini buraya gir
+    const GITHUB_TOKEN = 'BURAYA_TOKEN_GELECEK'; 
+    const GITHUB_USER = 'GITHUB_KULLANICI_ADIN'; 
+    const REPO_NAME = 'REPO_ADIN'; 
+
+    // Base64 Çeviriciler (Türkçe Karakter Uyumlu)
+    function utf8_to_b64(str) { return window.btoa(unescape(encodeURIComponent(str))); }
+    function b64_to_utf8(str) { return decodeURIComponent(escape(window.atob(str))); }
+
+    // --- SAYAÇ (bilgi.json) İŞLEMLERİ ---
+    const BILGI_API_URL = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/bilgi.json`;
+    let sayacSha = '';
+    let sayacData = { count: 0, month: new Date().getMonth() };
+
+    async function fetchSayac() {
+        try {
+            const res = await fetch(BILGI_API_URL, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
+            if (res.ok) {
+                const data = await res.json();
+                sayacSha = data.sha;
+                sayacData = JSON.parse(b64_to_utf8(data.content));
+                
+                const currentMonth = new Date().getMonth();
+                if (sayacData.month !== currentMonth) {
+                    sayacData.count = 0; 
+                    sayacData.month = currentMonth;
+                    saveSayac(sayacData, "Yeni ay sayacı sıfırlandı");
+                }
+                document.getElementById('satisfactionCount').innerText = sayacData.count;
+            }
+        } catch (err) { console.error("bilgi.json bulunamadı veya okunamadı."); }
+    }
+
+    async function saveSayac(newData, msg) {
+        const bodyData = { message: msg, content: utf8_to_b64(JSON.stringify(newData)) };
+        if (sayacSha) bodyData.sha = sayacSha;
+        const res = await fetch(BILGI_API_URL, {
+            method: 'PUT',
+            headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData)
+        });
+        if (res.ok) {
+            const result = await res.json();
+            sayacSha = result.content.sha;
+            document.getElementById('satisfactionCount').innerText = newData.count;
+        }
+    }
+
+    window.addSatisfaction = function() {
+        sayacData.count += 1;
+        saveSayac(sayacData, "Memnuniyet +1");
+    };
+
+    // --- ÜRÜN (depo.json) İŞLEMLERİ ---
+    const DEPO_API_URL = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/depo.json`;
+    let currentSha = '';
+    let products = [];
+    const statusEl = document.getElementById('status');
+
+    function showStatus(msg, isError = false) {
+        statusEl.textContent = msg;
+        statusEl.className = isError ? 'text-error' : 'text-success';
+        setTimeout(() => statusEl.textContent = '', 3000);
+    }
+
+    async function fetchProducts() {
+        try {
+            const res = await fetch(DEPO_API_URL, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
+            if (res.ok) {
+                const data = await res.json();
+                currentSha = data.sha;
+                products = JSON.parse(b64_to_utf8(data.content));
+            } else { products = []; }
+            renderProducts();
+        } catch (err) { document.getElementById('productsContainer').innerHTML = '<span class="text-error">Hata oluştu.</span>'; }
+    }
+
+    async function saveProducts(newProducts, msg) {
+        document.getElementById('submitBtn').disabled = true;
+        showStatus('Kaydediliyor...', false);
+        const bodyData = { message: msg, content: utf8_to_b64(JSON.stringify(newProducts, null, 2)) };
+        if (currentSha) bodyData.sha = currentSha;
+
+        try {
+            const res = await fetch(DEPO_API_URL, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyData)
+            });
+            if (res.ok) {
+                const result = await res.json();
+                currentSha = result.content.sha;
+                products = newProducts;
+                renderProducts();
+                showStatus('Başarıyla güncellendi!');
+                document.getElementById('productForm').reset();
+            } else { showStatus('Hata!', true); }
+        } catch (err) { showStatus('Bağlantı hatası!', true); } 
+        finally { document.getElementById('submitBtn').disabled = false; }
+    }
+
+    function renderProducts() {
+        const container = document.getElementById('productsContainer');
+        if (products.length === 0) { container.innerHTML = '<p>Ürün yok.</p>'; return; }
+        
+        container.innerHTML = '';
+        [...products].reverse().forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'product-item';
+            div.innerHTML = `
+                <div class="product-info">
+                    <h4>${p.name} - ₺${p.price}</h4>
+                    <p>${p.desc.substring(0, 50)}...</p>
+                </div>
+                <button class="btn-danger" onclick="deleteProduct('${p.id}')"><i class="fa-solid fa-trash"></i> Sil</button>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    document.getElementById('productForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newProduct = {
+            id: 'urun_' + Date.now(),
+            name: document.getElementById('pName').value,
+            price: document.getElementById('pPrice').value,
+            img: document.getElementById('pImg').value,
+            desc: document.getElementById('pDesc').value
+        };
+        saveProducts([...products, newProduct], `Ürün eklendi: ${newProduct.name}`);
+    });
+
+    window.deleteProduct = function(id) {
+        if(confirm('Silmek istediğinize emin misiniz?')) {
+            saveProducts(products.filter(p => p.id !== id), `Ürün silindi: ${id}`);
+        }
+    };
+
+    // Başlangıç
+    fetchSayac();
+    fetchProducts();
+</script>
+</body>
+</html>
